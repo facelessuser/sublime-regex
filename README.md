@@ -4,4 +4,3 @@ Python regex module packaged for Sublime.  Currently only for OSX, Win32, and Wi
 Author: Matthew Barnett  
 Home Page: https://bitbucket.org/mrabarnett/mrab-regex  
 License: Python Software Foundation License  
-Package Index Owner: mrabarnett
