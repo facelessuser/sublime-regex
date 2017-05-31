@@ -28,6 +28,17 @@ __all__ = ["A", "ASCII", "B", "BESTMATCH", "D", "DEBUG", "E", "ENHANCEMATCH",
 
 # The regex exception.
 class error(Exception):
+    """Exception raised for invalid regular expressions.
+
+    Attributes:
+
+        msg: The unformatted error message
+        pattern: The regular expression pattern
+        pos: The position in the pattern where compilation failed, or None
+        lineno: The line number where compilation failed, unless pos is None
+        colno: The column number where compilation failed, unless pos is None
+    """
+
     def __init__(self, message, pattern=None, pos=None):
         newline = '\n' if isinstance(pattern, str) else b'\n'
         self.msg = message
@@ -287,9 +298,13 @@ def _fold_case(info, string):
 
     return _regex.fold_case(flags, string)
 
-def is_cased(info, char):
+def is_cased_i(info, char):
     "Checks whether a character is cased."
     return len(_regex.get_all_cases(info.flags, char)) > 1
+
+def is_cased_f(flags, char):
+    "Checks whether a character is cased."
+    return len(_regex.get_all_cases(flags, char)) > 1
 
 def _compile_firstset(info, fs):
     "Compiles the firstset for the pattern."
@@ -315,7 +330,7 @@ def _check_firstset(info, reverse, fs):
 
 #        if i.case_flags:
 #            if isinstance(i, Character):
-#                if is_cased(info, i.value):
+#                if is_cased_i(info, i.value):
 #                    return []
 #            elif isinstance(i, SetBase):
 #                return []
@@ -1881,9 +1896,6 @@ class RegexBase:
     def compile(self, reverse=False, fuzzy=False):
         return self._compile(reverse, fuzzy)
 
-    def dump(self, indent, reverse):
-        self._dump(indent, reverse)
-
     def is_empty(self):
         return False
 
@@ -1920,7 +1932,7 @@ class ZeroWidthBase(RegexBase):
             flags |= REVERSE_OP
         return [(self._opcode, flags)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}{} {}".format(INDENT * indent, self._op_name,
           POS_TEXT[self.positive]))
 
@@ -1940,7 +1952,7 @@ class Any(RegexBase):
             flags |= FUZZY_OP
         return [(self._opcode[reverse], flags)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}{}".format(INDENT * indent, self._op_name))
 
     def max_width(self):
@@ -1993,7 +2005,7 @@ class Atomic(RegexBase):
         return ([(OP.ATOMIC, )] + self.subpattern.compile(reverse, fuzzy) +
           [(OP.END, )])
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}ATOMIC".format(INDENT * indent))
         self.subpattern.dump(indent + 1, reverse)
 
@@ -2104,7 +2116,7 @@ class Branch(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}BRANCH".format(INDENT * indent))
         self.branches[0].dump(indent + 1, reverse)
         for b in self.branches[1 : ]:
@@ -2434,7 +2446,7 @@ class CallGroup(RegexBase):
     def _compile(self, reverse, fuzzy):
         return [(OP.GROUP_CALL, self.call_ref)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}GROUP_CALL {}".format(INDENT * indent, self.group))
 
     def __eq__(self, other):
@@ -2507,7 +2519,7 @@ class Character(RegexBase):
 
         return code.compile(reverse, fuzzy)
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         display = ascii(chr(self.value)).lstrip("bu")
         print("{}CHARACTER {} {}{}".format(INDENT * indent,
           POS_TEXT[self.positive], display, CASE_TEXT[self.case_flags]))
@@ -2595,7 +2607,7 @@ class Conditional(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}GROUP_EXISTS {}".format(INDENT * indent, self.group))
         self.yes_item.dump(indent + 1, reverse)
         if not self.no_item.is_empty():
@@ -2730,7 +2742,7 @@ class Fuzzy(RegexBase):
         return ([(OP.FUZZY, flags) + tuple(arguments)] +
           self.subpattern.compile(reverse, True) + [(OP.END,)])
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         constraints = self._constraints_to_string()
         if constraints:
             constraints = " " + constraints
@@ -2789,7 +2801,7 @@ class Grapheme(RegexBase):
 
         return grapheme_matcher.compile(reverse, fuzzy)
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}GRAPHEME".format(INDENT * indent))
 
     def max_width(self):
@@ -2854,7 +2866,7 @@ class GreedyRepeat(RegexBase):
 
         return ([tuple(repeat)] + subpattern + [(OP.END, )])
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         if self.max_count is None:
             limit = "INF"
         else:
@@ -2952,7 +2964,7 @@ class Group(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         group = self.group
         if group < 0:
             group = private_groups[group]
@@ -3016,7 +3028,7 @@ class LookAround(RegexBase):
         return ([(OP.LOOKAROUND, int(self.positive), int(not self.behind))] +
           self.subpattern.compile(self.behind) + [(OP.END, )])
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}LOOK{} {}".format(INDENT * indent,
           self._dir_text[self.behind], POS_TEXT[self.positive]))
         self.subpattern.dump(indent + 1, self.behind)
@@ -3096,7 +3108,7 @@ class LookAroundConditional(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}CONDITIONAL {} {}".format(INDENT * indent,
           self._dir_text[self.behind], POS_TEXT[self.positive]))
         self.subpattern.dump(indent + 1, self.behind)
@@ -3167,7 +3179,7 @@ class Property(RegexBase):
             flags |= FUZZY_OP
         return [(self._opcode[self.case_flags, reverse], flags, self.value)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         prop = PROPERTY_NAMES[self.value >> 16]
         name, value = prop[0], prop[1][self.value & 0xFFFF]
         print("{}PROPERTY {} {}:{}{}".format(INDENT * indent,
@@ -3249,7 +3261,7 @@ class Range(RegexBase):
         return [(self._opcode[self.case_flags, reverse], flags, self.lower,
           self.upper)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         display_lower = ascii(chr(self.lower)).lstrip("bu")
         display_upper = ascii(chr(self.upper)).lstrip("bu")
         print("{}RANGE {} {} {}{}".format(INDENT * indent,
@@ -3301,7 +3313,7 @@ class RefGroup(RegexBase):
             flags |= FUZZY_OP
         return [(self._opcode[self.case_flags, reverse], flags, self.group)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}REF_GROUP {}{}".format(INDENT * indent, self.group,
           CASE_TEXT[self.case_flags]))
 
@@ -3346,7 +3358,7 @@ class Sequence(RegexBase):
                 if s.case_flags != case_flags:
                     # Different case sensitivity, so flush, unless neither the
                     # previous nor the new character are cased.
-                    if s.case_flags or is_cased(info, s.value):
+                    if s.case_flags or is_cased_i(info, s.value):
                         Sequence._flush_characters(info, characters,
                           case_flags, items)
 
@@ -3357,7 +3369,7 @@ class Sequence(RegexBase):
                 if s.case_flags != case_flags:
                     # Different case sensitivity, so flush, unless the neither
                     # the previous nor the new string are cased.
-                    if s.case_flags or any(is_cased(info, c) for c in
+                    if s.case_flags or any(is_cased_i(info, c) for c in
                       characters):
                         Sequence._flush_characters(info, characters,
                           case_flags, items)
@@ -3414,7 +3426,7 @@ class Sequence(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         for s in self.items:
             s.dump(indent, reverse)
 
@@ -3425,15 +3437,81 @@ class Sequence(RegexBase):
 
         # Disregard case_flags if all of the characters are case-less.
         if case_flags & IGNORECASE:
-            if not any(is_cased(info, c) for c in characters):
+            if not any(is_cased_i(info, c) for c in characters):
                 case_flags = NOCASE
 
-        if len(characters) == 1:
-            items.append(Character(characters[0], case_flags=case_flags))
+        if (case_flags & FULLIGNORECASE) == FULLIGNORECASE:
+            literals = Sequence._fix_full_casefold(characters)
+
+            for item in literals:
+                chars = item.characters
+
+                if len(chars) == 1:
+                    items.append(Character(chars[0], case_flags=item.case_flags))
+                else:
+                    items.append(String(chars, case_flags=item.case_flags))
         else:
-            items.append(String(characters, case_flags=case_flags))
+            if len(characters) == 1:
+                items.append(Character(characters[0], case_flags=case_flags))
+            else:
+                items.append(String(characters, case_flags=case_flags))
 
         characters[:] = []
+
+    @staticmethod
+    def _fix_full_casefold(characters):
+        # Split a literal needing full case-folding into chunks that need it
+        # and chunks that can use simple case-folding, which is faster.
+        expanded = [_regex.fold_case(FULL_CASE_FOLDING, c) for c in
+          _regex.get_expand_on_folding()]
+        string = _regex.fold_case(FULL_CASE_FOLDING, ''.join(chr(c)
+          for c in characters)).lower()
+        chunks = []
+
+        for e in expanded:
+            found = string.find(e)
+
+            while found >= 0:
+                chunks.append((found, found + len(e)))
+                found = string.find(e, found + 1)
+
+        pos = 0
+        literals = []
+
+        for start, end in Sequence._merge_chunks(chunks):
+            if pos < start:
+                literals.append(Literal(characters[pos : start],
+                  case_flags=IGNORECASE))
+
+            literals.append(Literal(characters[start : end],
+              case_flags=FULLIGNORECASE))
+            pos = end
+
+        if pos < len(characters):
+            literals.append(Literal(characters[pos : ], case_flags=IGNORECASE))
+
+        return literals
+
+    @staticmethod
+    def _merge_chunks(chunks):
+        if len(chunks) < 2:
+            return chunks
+
+        chunks.sort()
+
+        start, end = chunks[0]
+        new_chunks = []
+
+        for s, e in chunks[1 : ]:
+            if s <= end:
+                end = max(end, e)
+            else:
+                new_chunks.append((start, end))
+                start, end = s, e
+
+        new_chunks.append((start, end))
+
+        return new_chunks
 
     def is_empty(self):
         return all(i.is_empty() for i in self.items)
@@ -3500,7 +3578,7 @@ class SetBase(RegexBase):
 
         return code
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}{} {}{}".format(INDENT * indent, self._op_name,
           POS_TEXT[self.positive], CASE_TEXT[self.case_flags]))
         for i in self.items:
@@ -3780,7 +3858,7 @@ class String(RegexBase):
         return [(self._opcode[self.case_flags, reverse], flags,
           len(self.folded_characters)) + self.folded_characters]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         display = ascii("".join(chr(c) for c in self.characters)).lstrip("bu")
         print("{}STRING {}{}".format(INDENT * indent, display,
           CASE_TEXT[self.case_flags]))
@@ -3792,11 +3870,11 @@ class String(RegexBase):
         return 0, self
 
 class Literal(String):
-    def _dump(self, indent, reverse):
-        for c in self.characters:
-            display = ascii(chr(c)).lstrip("bu")
-            print("{}CHARACTER MATCH {}{}".format(INDENT * indent, display,
-              CASE_TEXT[self.case_flags]))
+    def dump(self, indent, reverse):
+        literal = ''.join(chr(c) for c in self.characters)
+        display = ascii(literal).lstrip("bu")
+        print("{}LITERAL MATCH {}{}".format(INDENT * indent, display,
+          CASE_TEXT[self.case_flags]))
 
 class StringSet(RegexBase):
     _opcode = {(NOCASE, False): OP.STRING_SET, (IGNORECASE, False):
@@ -3853,7 +3931,7 @@ class StringSet(RegexBase):
             return [(self._opcode[case_flags, reverse], index, min_len,
               max_len)]
 
-    def _dump(self, indent, reverse):
+    def dump(self, indent, reverse):
         print("{}STRING_SET {}{}".format(INDENT * indent, self.name,
           CASE_TEXT[self.case_flags]))
 

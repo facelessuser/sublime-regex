@@ -239,7 +239,7 @@ __all__ = ["compile", "escape", "findall", "finditer", "fullmatch", "match",
   "U", "UNICODE", "V0", "VERSION0", "V1", "VERSION1", "X", "VERBOSE", "W",
   "WORD", "error", "Regex"]
 
-__version__ = "2.4.112"
+__version__ = "2.4.123"
 
 # --------------------------------------------------------------------
 # Public interface.
@@ -353,7 +353,7 @@ def template(pattern, flags=0):
     "Compile a template pattern, returning a pattern object."
     return _compile(pattern, flags | TEMPLATE)
 
-def escape(pattern, special_only=False):
+def escape(pattern, special_only=True):
     "Escape all non-alphanumeric characters or special characters in pattern."
     # Convert it to Unicode.
     if isinstance(pattern, bytes):
@@ -364,7 +364,7 @@ def escape(pattern, special_only=False):
     s = []
     if special_only:
         for c in p:
-            if c in _METACHARS:
+            if c in _METACHARS or c.isspace():
                 s.append("\\")
                 s.append(c)
             elif c == "\x00":
@@ -394,7 +394,7 @@ def escape(pattern, special_only=False):
 import _regex_core
 import _regex
 from threading import RLock as _RLock
-from locale import getlocale as _getlocale
+from locale import getpreferredencoding as _getpreferredencoding
 from _regex_core import *
 from _regex_core import (_ALL_VERSIONS, _ALL_ENCODINGS, _FirstSetError,
   _UnscopedFlagSet, _check_group_features, _compile_firstset,
@@ -408,7 +408,7 @@ from _regex_core import (ALNUM as _ALNUM, Info as _Info, OP as _OP, Source as
 
 DEFAULT_VERSION = VERSION0
 
-_METACHARS = frozenset("()[]{}?*+|^$\\.")
+_METACHARS = frozenset("()[]{}?*+|^$\\.-#&~")
 
 _regex_core.DEFAULT_VERSION = DEFAULT_VERSION
 
@@ -433,7 +433,7 @@ def _compile(pattern, flags=0, kwargs={}):
     locale_key = (type(pattern), pattern)
     if _locale_sensitive.get(locale_key, True) or (flags & LOCALE) != 0:
         # This pattern is, or might be, locale-sensitive.
-        pattern_locale = _getlocale()[1]
+        pattern_locale = _getpreferredencoding()
     else:
         # This pattern is definitely not locale-sensitive.
         pattern_locale = None
